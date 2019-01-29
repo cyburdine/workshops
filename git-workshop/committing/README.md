@@ -75,7 +75,7 @@ The commit history can be displayed using the `git log` command.
 ```
 git log
 commit 05fa82cd74b765fd1c82d6f2727e0c14edff9654
-Author: John Doe <user@exxonmobil.com>
+Author: John Doe <user@myemail.com>
 Date:   Sat Sep 8 06:26:13 2018 +0000
 
     Added README
@@ -146,13 +146,13 @@ The new commit can also be seen in the history using the `git log` command:
 ```
 git log
 commit f680421a102168d3efe7478304d05baf741d3bbf
-Author: John Doe <user@exxonmobil.com>
+Author: John Doe <user@myemail.com>
 Date:   Sat Sep 8 07:17:57 2018 +0000
 
     Added description of repository
 
 commit 05fa82cd74b765fd1c82d6f2727e0c14edff9654
-Author: John Doe <user@exxonmobil.com>
+Author: John Doe <user@myemail.com>
 Date:   Sat Sep 8 06:26:13 2018 +0000
 
     Added README

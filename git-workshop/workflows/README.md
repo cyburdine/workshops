@@ -9,7 +9,7 @@ The goal of this exercise is to demonstrate how to utilize the Fork and Pull wor
 
 ## Forking a Repository
 
-The shared repository for this exercise is called [fork-pull-example](https://gitlab.xom.cloud/hackathons2018/fork-pull-example) and contains a basic ansible playbook that loops through a folder containing different events and the students in attendance. 
+The shared repository for this exercise is called [fork-pull-example](https://git.rhlabs.net/cyburdine/fork-pull-example) and contains a basic ansible playbook that loops through a folder containing different events and the students in attendance. 
 
 Navigate to the repository in GitLab. ```CLICK ON THE LINK ABOVE TO FORK``` from example.
 
@@ -20,7 +20,7 @@ After the fork was created, clone the repository locally to your machine by loca
 _Note:_ Make sure that you are no longer inside the hellogit directory. If you are, move one level up by running the `../` command
 
 ```
-git clone git@gitlab.xom.cloud:<USER>/fork-pull-example.git
+git clone git@git.rhlabs.net:<USER>/fork-pull-example.git
 cd fork-pull-example
 ```
 
@@ -111,7 +111,7 @@ When changes occur in the upstream repository, we would want to incorporate thos
 
 The first action that we would want to do is to add a new _remote_ that references the upstream repository. We'll call the remote `upstream`. To add a remote, the URL of the repository must be known as it is a required parameter. 
 
-Navigate to the [upstream repository](https://gitlab.xom.cloud/hackathons2018/fork-pull-example) in GitLab and copy the **SSH** based URL. Execute the following command to add the remote
+Navigate to the [upstream repository](https://git.rhlabs.net/cyburdine/fork-pull-example) in GitLab and copy the **SSH** based URL. Execute the following command to add the remote
 
 ```
 git remote add upstream <url>

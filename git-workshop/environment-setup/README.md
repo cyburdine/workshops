@@ -10,7 +10,7 @@ There are multiple methods in which one can communicate with remote repositories
 Create a new SSH key on your machine by executing the following command:
 
 ```
-ssh-keygen -t rsa -b 4096 -C "your_email@exxonmobil.com"
+ssh-keygen -t rsa -b 4096 -C "your_email@myemail.com"
 ```
 
 _The proceeding command generates a new SSH key with 4096 bits of *type* RSA. Using an email address as the comment associated with the key pair is a common convention when utilizing SSH keys._
@@ -45,14 +45,14 @@ To avoid repeating for each repository, the following steps will be apply change
 Set the email address by executing the following command:
 
 ```
-git config --global user.email "user@exxonmobil.com"
+git config --global user.email "user@myemail.com"
 ```
 
 Confirm the email address was successfully set
 
 ```
 git config --global user.email
-user@exxonmobil.com
+user@myemail.com
 ```
 
 ### Setting Your User Name
@@ -77,7 +77,7 @@ View the resulting `.gitconfig` file that was modified as a result of the procee
 ```
 cat ~/.gitconfig 
 [user]
-	email = user@exxonmobil.com
+	email = user@myemail.com
 	name = John Doe
 ```
 

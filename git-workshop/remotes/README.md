@@ -7,7 +7,7 @@ Git as a distributed version control system embraces the ability to utilize shar
 
 Earlier in the workshop, we created an account on the GitLab sever. Now, let's use this access to create a new Project to share the _hellogit_ repository that we have been working on.
 
-First, navigate to GitLab: [https://gitlab.xom.cloud](https://gitlab.xom.cloud) and login using the account created previously.
+First, navigate to GitLab: [https://git.rhlabs.net](https://git.rhlabs.net) and login using the account created previously.
 
 A project in GitLab is a space to host your codebase as well as features a number of collaboration tools including issue tracking, wiki and continuous integration and continuous delivery features.
 
@@ -28,15 +28,15 @@ On the project details page, when no content exists within the repository, instr
 Add the GitLab repository as a remote being sure to replace the name of the repository specified by the `<USER>` value:
 
 ```
-git remote add origin git@gitlab.xom.cloud:<USER>/hellogit.git
+git remote add origin git@git.rhlabs.net:<USER>/hellogit.git
 ```
 
 the new remote can be confirmed by listing the configured remotes for the repository as shown below. The `-v` flag provides additional detail including the URL of the repository.
 
 ```
 $ git remote -v
-origin	git@gitlab.xom.cloud:<USER/hellogit.git (fetch)
-origin	git@gitlab.xom.cloud:<USER>/hellogit.git (push)
+origin	git@git.rhlabs.net:<USER/hellogit.git (fetch)
+origin	git@git.rhlabs.net:<USER>/hellogit.git (push)
 ```
 
 `origin` is the name of the default remote that git configures.
@@ -60,7 +60,7 @@ remote:         These updates may interrupt service briefly. Please plan
 remote:                               accordingly.
 remote:
 remote: ========================================================================
-To git@gitlab.xom.cloud:<USER>/hellogit.git
+To git@git.rhlabs.net:<USER>/hellogit.git
  * [new branch]      master -> master
 ```
 
