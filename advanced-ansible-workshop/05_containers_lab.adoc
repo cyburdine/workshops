@@ -1,0 +1,250 @@
+:scrollbar:
+:data-uri:
+:linkattrs:
+:toc2:
+:labname: Ansible & Containers
+:show_solution: false
+
+
+== {labname} Lab
+
+In this lab, you will learn how Ansible can be used to build and manage container images, specifically using Docker.
+
+.Goals
+* Building Docker Containers
+* Running Docker Containers
+
+:numbered:
+== Lab Setup
+. Connect to the control host with the student id you were provided:
++
+[source,sh]
+----
+[laptop ]$ ssh ${MYUSER}@${CONTROL_HOST}
+----
++
+.Example
+[source,sh]
+----
+[laptop ]$ ssh student5@192.168.20.10
+----
+. Ensure you are on the control host and in your home directory
++
+[source,sh]
+----
+[student@control ~]$
+----
+you should see something similar to the example above
+
+. Create a folder for this lab, let's call it lab05
++
+[source,sh]
+----
+[student@control ~]$ mkdir lab05
+[student@control ~]$ cd lab05
+[student@control lab05]$ pwd
+/home/student20/lab05
+----
+you should see something similar to the example above, if you do you are now ready to start the lab.
+== Example Project
+
+A project has been created that will emphasize how to build and manage docker containers. In addition, we will begin to utilize concepts that have been introduced in prior exercises to illustrate of the different components of Ansible come together. The repository can be found at link:https://gitlab.xom.cloud/hackathons2018/ansible-workshop-containers[https://gitlab.xom.cloud/hackathons2018/ansible-workshop-containers]
+
+From the _Control Node_, clone the project and change in to the directory:
+
+[source,sh]
+----
+[student@control lab05]$ git clone git@gitlab.xom.cloud:hackathons2018/ansible-workshop-containers.git
+----
++
+.Sample Output
+[source,sh]
+----
+Cloning into 'ansible-workshop-containers'...
+remote: Enumerating objects: 34, done.
+remote: Counting objects: 100% (34/34), done.
+remote: Compressing objects: 100% (31/31), done.
+remote: Total 34 (delta 8), reused 0 (delta 0)
+Receiving objects: 100% (34/34), 11.50 KiB | 0 bytes/s, done.
+Resolving deltas: 100% (8/8), done.
+----
+
+This repository contains a Flask based Python application that exposes an API. A full walkthrough of API's will be described in later section. The goal of this workshop is to build and run the container.
+
+:numbered:
+== Building a Docker Container
+
+Ansible contains the link:docker_image[https://docs.ansible.com/ansible/latest/modules/docker_image_module.html] module to build containers. Docker makes use of a _Dockerfile_ to describe how a container will be built.
+
+Within the repository, there is a stub of an Ansible playbook that you will extend to not only build the container, but also run the container.
+
+Locate the stub playbook files called _container-workshop.yml.starter_. This file contains a set of variables that will be used in the playbook as well as a call to the _template_ module to create the Dockerfile from a Jinja template.
+
+First, rename the stub file to remove the .starter extension
+
+[source,sh]
+----
+[student@control ansible-workshop-containers]$ mv container-workshop.yml.starter container-workshop.yml
+----
+
+Next, run the existing playbook to see the Dockerfile that is produced after after the template is executed:
+
+[source,sh]
+----
+[student@control ansible-workshop-containers]$ ansible-playbook container-workshop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [localhost] ***************************************************************************************************************************************************************************************************************************
+
+TASK [Gathering Facts] *********************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Create Dockerfile] *******************************************************************************************************************************************************************************************************************
+changed: [localhost]
+
+PLAY RECAP *********************************************************************************************************************************************************************************************************************************
+localhost                  : ok=2    changed=1    unreachable=0    failed=0
+----
+
+Review the contents of the _Dockerfile_ that was created in the current folder. Notice the location of the base image, port that is exposed, and command that is used to run the resulting container.
+
+Next, add the following lines to the playbook below the _template_ module which will build the new image.
+
+[source,sh]
+----
+    - name: Build Image
+      docker_image:
+        name: "{{ workshop_image_name }}"
+        path: "{{ playbook_dir }}"
+        tag: "{{ workshop_image_tag }}"
+----
+
+The Ansible Docker module requires the docker python library be installed. Install this module using _pip_ by executing the following command:
+
+[source,sh]
+----
+[student@control lab05]$ sudo pip install docker
+----
+
+Now, run the playbook again to build the image.
+
+[source,sh]
+----
+[student@control ansible-workshop-containers]$ ansible-playbook container-workshop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [localhost] ***************************************************************************************************************************************************************************************************************************
+
+TASK [Gathering Facts] *********************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Create Dockerfile] *******************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Build Image] *************************************************************************************************************************************************************************************************************************
+changed: [localhost]
+
+PLAY RECAP *********************************************************************************************************************************************************************************************************************************
+localhost                  : ok=3    changed=1    unreachable=0    failed=0
+----
+
+A new image called _ansible-workshop-api_ should have been created. Use the docker CLI to verify it has been created:
+
+[source,sh]
+----
+[student@control ansible-workshop-containers]$ docker images
+----
++
+.Sample Output
+[source,sh]
+----
+REPOSITORY                                         TAG                 IMAGE ID            CREATED             SIZE
+ansible-workshop-api                               latest              ea2a840ddb34        52 seconds ago      631 MB
+registry.access.redhat.com/rhscl/python-27-rhel7   latest              ba14ea916987        4 weeks ago         625 MB
+docker.io/busybox                                  latest              e1ddd7948a1c        8 weeks ago         1.16 MB
+----
+
+:numbered:
+== Running a Docker Container
+
+Ansible contains the link:docker_container[https://docs.ansible.com/ansible/latest/modules/docker_container_module.html] to manage the lifecycle of Docker containers. In this section, we will start the container that was previously built.
+
+Add the following content below the docker_image module in the _container-workshop.yml_ playbook:
+
+[source,sh]
+----
+    - name: Manage Container
+      docker_container:
+        name: "{{ workshop_image_name }}"
+        image: "{{ workshop_image_name }}:{{ workshop_image_tag }}"
+        published_ports: "{{ local_exposed_port }}:{{ image_exposed_port }}"
+        state: "{{ container_state }}"
+----
+
+Run the playbook once again to start the container:
+
+[source,sh]
+----
+[student@control ansible-workshop-containers]$ ansible-playbook container-workshop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [localhost] ***************************************************************************************************************************************************************************************************************************
+
+TASK [Gathering Facts] *********************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Create Dockerfile] *******************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Build Image] *************************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Manage Container] ********************************************************************************************************************************************************************************************************************
+changed: [localhost]
+
+PLAY RECAP *********************************************************************************************************************************************************************************************************************************
+localhost                  : ok=4    changed=1    unreachable=0    failed=0
+----
+
+Verify the container is running:
+
+[source,sh]
+----
+[student@control ansible-workshop-containers]$ docker ps
+----
++
+.Sample Output
+[source,sh]
+----
+CONTAINER ID        IMAGE                         COMMAND                  CREATED              STATUS              PORTS                              NAMES
+83ce97f45405        ansible-workshop-api:latest   "container-entrypo..."   About a minute ago   Up About a minute   0.0.0.0:5000->5000/tcp, 8080/tcp   ansible-workshop-api
+----
+
+:numbered:
+== Verify the Application Can be Reached
+
+As mentioned previously, the container exposes a web based application that we will utilize in a later section. For now, we can verify that the container is running successfully and that we can invoke an endpoint on the application.
+
+As described in the playbook, the application exposes the application on port 5000. Execute the following command to invoke a health endpoint:
+
+[source,sh]
+----
+[student@control ansible-workshop-containers]$ curl http://localhost:5000/health
+----
++
+.Sample Output
+[source,sh]
+----
+ok
+----
+
+If an _ok_ response was returned, the container was built and is running successfully.

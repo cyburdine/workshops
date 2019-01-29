@@ -1,0 +1,362 @@
+:scrollbar:
+:data-uri:
+:linkattrs:
+:toc2:
+:labname: Ansible Vault
+:show_solution: false
+
+
+== {labname} Lab
+
+In this lab, you explore using Ansible to manage the encryption and decryption of files. The reason you might want to do this is to store sensitive information that you want to keep private. In our case we are wanting to keep a token for authentiction secret so that we can use it in our automation for authentication.
+
+.Goals
+* Create and edit an encrypted file
+* View the contents of an encrypted file
+* Change the password of an encrypted file
+* Encrypt and decrypt an existing file
+* Define playbook variables in an encrypted file
+* Create a playbook that uses the encrypted variables file
+* Run a playbook using an encrypted file
+
+:numbered:
+== Lab Setup
+. Connect to the control host with the student id you were provided:
++
+[source,sh]
+----
+[laptop ]$ ssh ${MYUSER}@${CONTROL_HOST}
+----
++
+.Example
+[source,sh]
+----
+[laptop ]$ ssh student5@192.168.20.10
+----
+. Ensure you are on the control host and in your home directory
++
+[source,sh]
+----
+[student@control ~]$
+----
+you should see something similar to the example above
+
+. Create a folder for this lab, let's call it lab04
++
+[source,sh]
+----
+[student@control ~]$ mkdir lab04
+[student@control ~]$ cd lab04
+[student@control lab04]$ pwd
+/home/student20/lab04
+----
+you should see something similar to the example above, if you do you are now ready to start the lab.
+
+== Manage Encrypted Files
+
+In this exercise, you create and edit an encrypted file which we use to store our token securely.
+
+=== Create and View Encrypted File
+
+. Create an encrypted file called `mytoken.yml` under `ansible_implementation`, entering `Xom123!` as the vault password when prompted:
++
+[source,sh]
+----
+[student@control lab04$ ansible-vault create mytoken.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+New Vault password: Xom123!
+Confirm New Vault password: Xom123!
+----
+
+. In the editor that is launched, add the following to the file:
++
+[source,texinfo]
+----
+This is my encrypted data
+----
+
+. Save the file and exit the editor.
+
+. Attempt to view the contents of the encrypted `mytoken.yml` file:
++
+[source,sh]
+----
+[student@control lab04$ cat mytoken.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+$ANSIBLE_VAULT;1.1;AES256
+30353232636462623438613666393263393238613363333735626661646265376566653765633565
+3663386561393538333864306136316265636632386535330a653764616133343630303633323831
+33653136313933636633623431646634636661333762393764396135333236316338656338383933
+3635646662316335370a363264366138333434626261363465636331333539323734643363326138
+34626565353831666333653139323965376335633132313162613838613561396462323037313132
+3264386531353862396233323963613139343635323532346538
+----
+* Because `mytoken.yml` is encrypted, you cannot view the contents in plain text.
+* The default cipher (AES) used to encrypt the file is based on a shared secret.
+
+. View the content of the encrypted file, entering `Xom123!` as the vault password when prompted:
++
+[source,sh]
+----
+[student@control lab04$ ansible-vault view mytoken.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+Vault password:
+This is my encrypted data
+----
+
+=== Edit and View Encrypted File
+
+In this section, you add content to `mytoken.yml` and then view the file.
+
+. Edit `mytoken.yml`, specifying `Xom123!` as the vault password when prompted:
++
+[source,sh]
+----
+[student@control lab04$ ansible-vault edit mytoken.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+Vault password:
+This is my encrypted data
+----
+
+. Add the following to the end of the file:
++
+[source,texinfo]
+----
+This is also encrypted
+----
+
+. Save the file and exit the editor.
+
+. View the content of `mytoken.yml`, using `Xom123!` as the vault password:
++
+[source,sh]
+----
+[student@control lab04$ ansible-vault view mytoken.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+Vault password:
+This is encrypted
+This is also encrypted
+----
+
+=== Change Encrypted File Password
+
+. Change the vault password of the encrypted `mytoken.yml` file from `Xom123!` to `ansible`:
++
+[source,sh]
+----
+[student@control lab04$ ansible-vault rekey mytoken.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+Vault password: (password hidden)
+New Vault password: (password hidden)
+Confirm New Vault password: (password hidden)
+Rekey successful
+----
+
+=== Decrypt and Encrypt Encrypted File
+
+. Decrypt the encrypted `mytoken.yml` file and save the file as `super-secret-decrypted.yml`, using the `ansible-vault decrypt` subcommand with the `--output` option and `ansible` as the vault password:
++
+[source,sh]
+----
+[student@control lab04$ ansible-vault decrypt mytoken.yml --output=super-secret-decrypted.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+Vault password:
+Decryption successful
+----
+
+. View the contents of the `super-secret-decrypted.yml` file to verify that it is decrypted:
++
+[source,sh]
+----
+[student@control lab04$ cat super-secret-decrypted.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+This is encrypted.
+This is also encrypted.
+----
+
+. Encrypt the `super-secret-decrypted.yml` file and save the file as `passwd-encrypted.yml`, this time entering `redhat` as the vault password:
++
+[source,sh]
+----
+[student@control lab04$ ansible-vault encrypt super-secret-decrypted.yml --output=super-secret-encrypted.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+New Vault password: (password hidden)
+Confirm New Vault password: (password hidden)
+Encryption successful
+----
+
+
+== Use Ansible Vault
+
+In this section, you use Ansible Vault to encrypt a local file containing passwords and use the encrypted version in a playbook to create users on your remote web systems.
+
+=== Create Encrypted Variable File
+
+In this exercise, you create an encrypted file called `secret.yml` in your lab04 directory. This file defines the password variables and stores the passwords to be used in the playbook. You use an associative array variable called `newusers` to define two users and passwords with the `name` variable as `ansibleuser1` and `ansibleuser2` and the `pw` variable as `redhat` and `Re4H1T`, respectively. You set the vault password to `redhat`.
+
+. Make sure that you are in your lab04 directory:
++
+[source,sh]
+----
+[student@control lab04$ cd ~/lab04
+----
+
+. Create an encrypted file called `secret.yml` in your home directory, providing the password `redhat` for the vault:
++
+[source,sh]
+----
+[student@control lab04$ ansible-vault create secret.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+New Vault password: redhat
+Confirm New Vault password: redhat
+----
+* This opens a file in the default editor, vim.
+
+. Add an associative array variable called `newusers`, containing key/value pairs for the user names and passwords:
++
+[source,yaml]
+----
+newusers:
+  - name: ansibleuser1
+    pw: redhat
+  - name: ansibleuser2
+    pw: Re4H1T
+----
+* The password is stored as plain text in the `pw` variable.
+. Save the file and exit the editor.
+
+=== Create Playbook That Uses Encrypted Variable File
+
+In this exercise, you create a playbook that uses the variables defined in the `secret.yml` encrypted file. You name the playbook `create_users.yml` and create it in your lab04 directory.
+
+You configure the playbook to use the `web` host group defined in the inventory file. Then you run this playbook on the remote managed hosts and configure the playbook to create users based on the `newusers` associative array. This creates the `ansibleuser1` and `ansibleuser2` users on the hosts in the `web` host group.
+
+. Create an Ansible Playbook in your lab04 directory:
++
+[source,sh]
+----
+[student@control lab04$ cat << EOF > create_users.yml
+---
+- name: create user accounts for all our servers
+  hosts: web
+  become: True
+  remote_user: root
+  vars_files:
+    - secret.yml
+  tasks:
+    - name: Creating users from secret.yml
+      user:
+        name: "{{ item.name }}"
+        password: "{{ item.pw | password_hash('sha512') }}"
+      with_items: "{{ newusers }}"
+EOF
+----
+* The password is converted into a password hash that uses the `password_hash` hashing filters and `sha512` algorithm.
+* You use the `user` module and pass this hashed password as an argument, as shown in this simplified example:
++
+[source,yaml]
+----
+user:
+  name: user1
+  password: "{{ 'passwordsaresecret' | password_hash('sha512') }}"
+----
+
+. Perform a syntax check of `create_users.yml` using `ansible-playbook --syntax-check`, and include the `--ask-vault-pass` option to prompt for the vault password set on `secret.yml`:
++
+[source,sh]
+----
+[student@control lab04$ ansible-playbook --syntax-check --ask-vault-pass create_users.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+Vault password: redhat
+
+playbook: create_users.yml
+----
+
+. Resolve any syntax errors before continuing.
+
+. Create a password file called `vault-pass` with `redhat` as the contents and set the permissions of the file to `0600`:
++
+[source,sh]
+----
+[student@control lab04$ echo 'redhat' > vault-pass
+[student@control lab04$ chmod 0600 vault-pass
+----
+* This file is used during playbook execution rather than prompting for a password.
+
+=== Execute Playbook With Encrypted Variable File
+
+In this section, you execute the Ansible Playbook, using the vault password file to create the `ansibleuser1` and `ansibleuser2` users on a remote system. The usernames and passwords are stored as variables in the encrypted `secret.yml` file. You then connect to `frontend1.${GUID}.internal` via SSH to verify that the playbook executed properly and created both users.
+
+. Execute the Ansible Playbook, using `vault-pass` as the vault password:
++
+[source,sh]
+----
+[student@control lab04$ ansible-playbook --vault-password-file=vault-pass create_users.yml
+----
++
+.Sample Output
+[source,texinfo]
+----
+PLAY [create user accounts for all our servers] ********************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [node-2]
+ok: [node-1]
+
+TASK [Creating users from secret.yml] ******************************************
+changed: [node-2] => (item={u'name': u'ansibleuser1', u'pw': u'redhat'})
+changed: [node-1] => (item={u'name': u'ansibleuser1', u'pw': u'redhat'})
+changed: [node-2] => (item={u'name': u'ansibleuser2', u'pw': u'Re4H1T'})
+changed: [node-1] => (item={u'name': u'ansibleuser2', u'pw': u'Re4H1T'})
+
+PLAY RECAP *********************************************************************
+node-1                     : ok=2    changed=1    unreachable=0    failed=0
+node-2                     : ok=2    changed=1    unreachable=0    failed=0
+----
+
+. Connect to youre remote servers (node-1 and node-2) via SSH first as `ansibleuser1` and then as `ansibleuser2` to verify that the users were created.
+* For the `ansibleuser1` user, use `redhat` as the password. For the `ansibleuser2` user, use `Re4H1T` as the password.

@@ -1,0 +1,18 @@
+:scrollbar:
+:data-uri:
+:linkattrs:
+:labname: Advanced Ansible Workshop
+:show_solution: false
+
+
+== {labname}
+.Overview
+Welcome to the {labname}.  This workshop is designed for users who have experience with Ansible and now want to dive deeper.  The goal of this workshop is to take you into topics that will help you build more efficient playbooks and ultimately become more fluent with Ansible.
+
+.Labs
+* link:01_conditionals_lab.adoc[Lab 01 - Controlling your Playbooks with Conditionals]
+* link:02_jinja_lab.adoc[Lab 02 - Understand templating with Jinja]
+* link:03_filtering_lab.adoc[Lab 03 - Add advanced capabilities to your playbooks with Filtering]
+* link:04_vault_lab.adoc[Lab 04 - Secure sensitive data with Ansible Vault]
+* link:05_containers_lab.adoc[Lab 05 - Managing Containers With Ansible]
+* link:06_api_lab.adoc[Lab 06 - Connect your automation with API endpoints]

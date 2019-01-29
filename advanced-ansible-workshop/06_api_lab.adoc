@@ -1,0 +1,503 @@
+:scrollbar:
+:data-uri:
+:linkattrs:
+:toc2:
+:labname: Ansible & APIs
+:show_solution: false
+
+
+== {labname} Lab
+
+In this lab, you will see how Ansible is able to interact with API's
+
+.Goals
+* Review functionality provided by sample application
+* Ansible uri module
+* Query API's
+* POST'ing Content
+
+:numbered:
+== Lab Setup
+. Connect to the control host with the student id you were provided:
++
+[source,sh]
+----
+[laptop ]$ ssh ${MYUSER}@${CONTROL_HOST}
+----
++
+.Example
+[source,sh]
+----
+[laptop ]$ ssh student5@192.168.20.10
+----
+. Ensure you are on the control host and in your home directory
++
+[source,sh]
+----
+[student@control ~]$
+----
+you should see something similar to the example above
+
+. Create a folder for this lab, let's call it lab06
++
+[source,sh]
+----
+[student@control ~]$ mkdir lab06
+[student@control ~]$ cd lab06
+[student@control lab06]$ pwd
+/home/student20/lab06
+----
+you should see something similar to the example above, if you do you are now ready to start the lab.
+
+== Sample Application Functionality
+
+In the prior Containers lab, you build and deployed an application packaged within a container. This application exposes a RESTful based application that contains CMDB data. Several endpoints are exposed by this application to interact with the contents of the database:
+
+1. Retrieve a list of all CMDB Items
+2. Retrieve a specific item
+3. Add a new item
+
+First, ensure the application that was used in the prior section is currently running by once again hitting the health endpoint:
+
+[source,sh]
+----
+[student@control ~]$ curl http://localhost:5000/health
+----
++
+.Sample Output
+[source,sh]
+----
+ok
+----
+
+
+If the application is not running or returns an invalid response, review the content of the prior lab to execute the playbook to start the container.
+
+=== Querying CMDB Items
+
+Items in the CMDB datase are available at an endpoint exposed by the application at the `/api/items` context. Using curl, invoke the endpoint. We will also use python to pass the response returned by the curl invocation to format the JSON:
+
+[source,sh]
+----
+[student@control ~]$ curl http://localhost:5000/api/items | python -m json.tool
+----
++
+.Sample Output
+[source,sh]
+----
+[
+    {
+        "fqdn": "server01.mydomain.com",
+        "id": 1,
+        "ip_address": "192.168.30.11",
+        "mac_address": "00:01:B7:23:F1:01",
+        "owned_by": "Mario Speedwagon",
+        "serial_number": "vF435F"
+    },
+    {
+        "fqdn": "server02.mydomain.com",
+        "id": 2,
+        "ip_address": "192.168.30.12",
+        "mac_address": "00:01:B7:23:F1:02",
+        "owned_by": "Petey Cruiser",
+        "serial_number": "7rGGTs"
+    },
+...
+----
+
+Take a moment to review the fields present in each CMDB item.
+
+:numbered:
+== Ansible URI Module
+
+RESTful based API's are invoked using HTTP and HTTPS transport protocols and Ansible provides the link:https://docs.ansible.com/ansible/latest/modules/uri_module.html[uri module] to interact with these services.
+
+Throughout the course of this lab, we will not only query items in the CMDB database, but also add new items to demonstrate some of the functionality of the module.
+
+:numbered:
+== Querying Items
+
+On the control node, create a new folder called `api-lab` that will container the Ansible resources for this lab:
+
+[source,sh]
+----
+[student@control ~]$ mkdir ~/api-lab
+----
+
+Change into the newly created directory
+
+[source,sh]
+----
+[student@control ~]$ cd ~/api-lab
+----
+
+Let's start by creating a playbook called `api-workshop.yml` that invokes the API to retrieve all of the items in the CMDB database:
+
+[source,yaml]
+----
+- hosts: localhost
+  vars:
+    base_path: "http://localhost:5000"
+    api_items_path: "/api/items"
+  tasks:
+    - name: Query Items
+      uri:
+        url: "{{ base_path }}{{ api_items_path }}"
+        return_content: yes
+        status_code: 200
+      register: cmdb_items
+    - name: Print Items
+      debug:
+        msg: "{{ cmdb_items.json }}"
+----
+
+In the playbook above, we used the URI module to invoke the items API to return a set of JSON formatted items. We registered the response as a variable called cmdb_items and then used the _debug_ module to print out the results.
+
+Execute the playbook to validate the contents:
+
+[source,sh]
+----
+[student@control api-lab]$ ansible-playbook api-workshop.yml
+----
+
+.Sample Output
+[source,sh]
+----
+PLAY [localhost] ***************************************************************************************************************************************************************************************************************************
+
+TASK [Gathering Facts] *********************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Query Items] *************************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Print Items] *************************************************************************************************************************************************************************************************************************
+ok: [localhost] => {
+    "msg": [
+        {
+            "fqdn": "server01.mydomain.com",
+            "id": 1,
+            "ip_address": "192.168.30.11",
+            "mac_address": "00:01:B7:23:F1:01",
+            "owned_by": "Mario Speedwagon",
+            "serial_number": "vF435F"
+        },
+...
+        {
+            "fqdn": "server30.mydomain.com",
+            "id": 20,
+            "ip_address": "192.168.30.30",
+            "mac_address": "00:01:B7:23:F1:20",
+            "owned_by": "Monty Carlo",
+            "serial_number": "ZZ8hsu"
+        }
+    ]
+}
+
+PLAY RECAP *********************************************************************************************************************************************************************************************************************************
+localhost                  : ok=3    changed=0    unreachable=0    failed=0
+----
+
+=== Filtering Responses
+
+Items that are returned from the API can be filtered in order to perform additional actions against the contents. As illustrated in an earlier lab, Ansible filters can be used to transform responses.
+
+Ansible contains a filter items based on their attribute values called `selectattr`. This filter takes in 3 values:
+
+1. The field to query against
+2. The condition
+3. The value
+
+As an example, lets try to find the item in the CMDB database that has a serial_number value of `CbjeaR`. This would allow us to perform additional actions on this item if we chose to do so.
+
+Replace the "Print Items" play with the following content:
+
+[source,yaml]
+----
+    - name: Print Items
+      debug:
+        msg: "{{ cmdb_items.json | selectattr('serial_number', 'match', 'CbjeaR') | first }}"
+----
+
+
+`serial_number` is the field to target in the list of responses, we want to perform a `match` against the value and then finally we include the value that we want to match against.
+
+Multiple filters in addition to the _selectattr_ filter are bing used. We are taking the response from the API, filtering the contents so that only those items that have serial number `CbjeaR` are extracted. Finally, we retrieve the first item that was found. As a use case, we could send a report of all hosts that have that particular serial number.
+
+Run the playbook again to print the item found that matched the query:
+
+[source,sh]
+----
+[student@control api-lab]$ ansible-playbook api-workshop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [localhost] ***************************************************************************************************************************************************************************************************************************
+
+TASK [Gathering Facts] *********************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Query Items] *************************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Print Items] *************************************************************************************************************************************************************************************************************************
+ok: [localhost] => {
+    "msg": {
+        "fqdn": "server07.mydomain.com",
+        "id": 7,
+        "ip_address": "192.168.30.17",
+        "mac_address": "00:01:B7:23:F1:07",
+        "owned_by": "Paige Turner",
+        "serial_number": "CbjeaR"
+    }
+}
+
+PLAY RECAP *********************************************************************************************************************************************************************************************************************************
+localhost                  : ok=3    changed=0    unreachable=0    failed=0
+----
+
+:numbered:
+== Adding Items to CMDB
+
+Now that we have seen the items that are present in the CMDB database, let's review how Ansible can interact with RESTful services to submit new items. Items that are added to the CMDB database use the POST REST method.
+
+The endpoint that has been used previously can also be used to submit new entries. This is accomplished by changing the method in which the URI Ansible module interacts with the API.
+
+The `body` field of the URI module can contain a dictionary of values containing the fields that we would want to add to the CMDB database. As you haven seen, the CMDB database contains the following fields:
+
+* fqdn
+* ip_address
+* mac_address
+* owned_by
+* serial_number
+
+Lets add a new item to the database with the following values:
+
+* fqdn: `server21.mydomain.com`
+* ip_address: `192.168.30.31`
+* mac_address: `00:01:B7:23:F1:21`
+* owned_by: `John Doe`
+* serial_number: `GsawtsQ`
+
+The body field of the URI module can be configured as follows:
+
+[source,yaml]
+----
+        body:
+          fqdn: "server21.mydomain.com"
+          ip_address: "192.168.30.31"
+          mac_address: "00:01:B7:23:F1:21"
+          owned_by: "John Doe"
+          serial_number: "GsawtsQ"
+----
+
+To enforce reusability, lets extract the values out into variables and add them to the `vars` section of the playbooks. Update the vars section so that it appears as follows:
+
+[source,yaml]
+----
+  vars:
+    base_path: "http://localhost:5000"
+    api_items_path: "/api/items"
+    new_item_fqdn: "server21.mydomain.com"
+    new_item_ip_address: "192.168.30.31"
+    new_item_mac_address: "00:01:B7:23:F1:21"
+    new_item_owned_by: "John Doe"
+    new_item_serial_number: "GsawtsQ"
+----
+
+Add the new task to add the item to the CMDB database underneath the Debug task as follows:
+
+[source,yaml]
+----
+    - name: Add Item
+      uri:
+        url: "{{ base_path }}{{ api_items_path }}"
+        method: POST
+        body:
+          fqdn: "{{ new_item_fqdn }}"
+          ip_address: "{{ new_item_ip_address }}"
+          mac_address: "{{ new_item_mac_address }}"
+          owned_by: "{{ new_item_owned_by }}"
+          serial_number: "{{ new_item_serial_number }}"
+        body_format: json
+        status_code: 201
+----
+
+In addition to the new body field, we also added the _method_ property to specify the invocation will be a POST request as well as specifying the body format to transmit to the API be JSON and to ensure that an HTTP 201 code is returned by the API. 201 is the HTTP code that signifies an item has been created.
+
+Execute the playbook:
+
+[source,sh]
+----
+[student@control api-lab]$ ansible-playbook api-workshop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [localhost] ***************************************************************************************************************************************************************************************************************************
+
+TASK [Gathering Facts] *********************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Query Items] *************************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Print Items] *************************************************************************************************************************************************************************************************************************
+ok: [localhost] => {
+    "msg": {
+        "fqdn": "server07.mydomain.com",
+        "id": 7,
+        "ip_address": "192.168.30.17",
+        "mac_address": "00:01:B7:23:F1:07",
+        "owned_by": "Paige Turner",
+        "serial_number": "CbjeaR"
+    }
+}
+
+TASK [Add Item] ****************************************************************************************************************************************************************************************************************************
+fatal: [localhost]: FAILED! => {"changed": false, "content": "Could not verify your access level for that URL.\nYou have to login with proper credentials", "content_length": "90", "content_type": "text/html; charset=utf-8", "date": "Thu, 27 Sep 2018 00:11:51 GMT", "msg": "Status code was 401 and not [201]: HTTP Error 401: UNAUTHORIZED", "redirected": false, "server": "Werkzeug/0.14.1 Python/2.7.13", "status": 401, "url": "http://localhost:5000/api/items", "www_authenticate": "Basic realm=\"Login Required\""}
+	to retry, use: --limit @/home/student19/api-lab/api-workshop.retry
+
+PLAY RECAP *********************************************************************************************************************************************************************************************************************************
+localhost                  : ok=3    changed=0    unreachable=0    failed=1
+----
+
+You will notice an error occurs with the message `Status code was 401 and not [201]: HTTP Error 401: UNAUTHORIZED`. This endpoint is protected so that only authorized parties can insert items. In the next section, we will discuss how to pass credentials to the URI module.
+
+=== Authenticating to the API
+
+The URI module supports authenticated access to RESTful API's. The API is protected by a fairly trivial basic authentication scheme.
+
+Since we will be passing sensitive values, we should not hardcode these items into our playbook or even include them as plain text. Let's create a variables file to contain our variables as well as utilize Ansible Value to encrypt the file.
+
+Create a new file called `api-creds.yml` containing the following content:
+
+[source,yaml]
+----
+api_user: admin
+api_password: secret
+----
+
+Use Ansible Vault to encrypt the file:
+
+[source,sh]
+----
+[student@control api-lab]$ ansible-vault encrypt api-creds.yml
+----
+
+When prompted, set `ansibleapi` as the password for the vault
+
+Update the `api-workshop.yml` playbook to include the contents of the `api-creds.yml` file using `vars_files`:
+
+[source,yaml]
+----
+- hosts: localhost
+  vars:
+    base_path: "http://localhost:5000"
+    api_items_path: "/api/items"
+    new_item_fqdn: "server21.mydomain.com"
+    new_item_ip_address: "192.168.30.31"
+    new_item_mac_address: "00:01:B7:23:F1:21"
+    new_item_owned_by: "John Doe"
+    new_item_serial_number: "GsawtsQ"
+  vars_files:
+    - api-creds.yml
+  tasks:
+  ...
+----
+
+Now, lets update the uri module to support basic authentication. Three properties need to be added to support this functionality:
+
+* user
+* password
+* force_basic_auth
+
+Update the play to include support for basic authentication to add items to the CMDB database as shown below:
+
+[source,yaml]
+----
+    - name: Add Item
+      uri:
+        url: "{{ base_path }}{{ api_items_path }}"
+        method: POST
+        body:
+          fqdn: "{{ new_item_fqdn }}"
+          ip_address: "{{ new_item_ip_address }}"
+          mac_address: "{{ new_item_mac_address }}"
+          owned_by: "{{ new_item_owned_by }}"
+          serial_number: "{{ new_item_serial_number }}"
+        body_format: json
+        status_code: 201
+        user: "{{ api_user }}"
+        password: "{{ api_password }}"
+        force_basic_auth: yes
+----
+
+Execute the playbook as well as adding the `--ask-vault-pass` parameter to be able to decode the values contained within the vault
+
+[source,sh]
+----
+[student@control api-lab]$ ansible-playbook api-workshop.yml --ask-vault-pass
+----
++
+.Sample Output
+[source,sh]
+----
+Vault password:
+
+PLAY [localhost] ***************************************************************************************************************************************************************************************************************************
+
+TASK [Gathering Facts] *********************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Query Items] *************************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Print Items] *************************************************************************************************************************************************************************************************************************
+ok: [localhost] => {
+    "msg": {
+        "fqdn": "server07.mydomain.com",
+        "id": 7,
+        "ip_address": "192.168.30.17",
+        "mac_address": "00:01:B7:23:F1:07",
+        "owned_by": "Paige Turner",
+        "serial_number": "CbjeaR"
+    }
+}
+
+TASK [Add Item] ****************************************************************************************************************************************************************************************************************************
+ok: [localhost]
+
+PLAY RECAP *********************************************************************************************************************************************************************************************************************************
+localhost                  : ok=4    changed=0    unreachable=0    failed=0
+----
+
+
+Enter the Ansible Vault password when prompted
+
+Confirm the playbook executes successfully.
+
+Finally, query the list of items in the CMDB using _curl_ to confirm the item configured in the previous playbook was added successfully
+
+[source,sh]
+----
+[student@control api-lab]$ curl http://localhost:5000/api/items | python -m json.tool
+----
+
+If the item below is returned in the response, the item was added to the CMDB database
+
+.Sample Output
+[source,json]
+----
+    {
+        "fqdn": "server21.mydomain.com",
+        "id": 22,
+        "ip_address": "192.168.30.31",
+        "mac_address": "00:01:B7:23:F1:21",
+        "owned_by": "John Doe",
+        "serial_number": "GsawtsQ"
+    }
+----

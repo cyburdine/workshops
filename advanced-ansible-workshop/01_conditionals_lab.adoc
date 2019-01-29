@@ -1,0 +1,591 @@
+:scrollbar:
+:data-uri:
+:linkattrs:
+:toc2:
+:labname: Ansible Conditionals
+:show_solution: false
+
+
+== {labname} Lab
+
+In this lab, we will work through exercises to help us understand how to use conditional elements in our playbooks to allow for decisions to be made based on information provided. Conditionals provide a way for you to build more advanced playbooks that are more efficient and streamlined.
+
+.Goals
+* Learn how to `*_register_*` variables
+* Capturing `*_facts_*` about systems
+* Using `*_when_*` to determine the when to run blocks of code
+* Using `*_loop_*` to minimize repetitive code
+* Using `*_until_*` to wait until a certain condition before running code
+* Selecting files and templates based on facts
+
+:numbered:
+== Lab Setup
+. Connect to the control host with the student id you were provided:
++
+[source,sh]
+----
+[laptop ]$ ssh ${MYUSER}@${CONTROL_HOST}
+----
++
+.Example
+[source,sh]
+----
+[laptop ]$ ssh student5@192.168.20.10
+----
+. Ensure you are on the control host and in your home directory
++
+[source,sh]
+----
+[student@control ~]$
+----
+you should see something similar to the example above
+
+. Create a folder for this lab, let's call it lab01
++
+[source,sh]
+----
+[student@control ~]$ mkdir lab01
+[student@control ~]$ cd lab01
+[student@control lab01]$ pwd
+/home/student20/lab01
+----
+you should see something similar to the example above, if you do you are now ready to start the lab.
+
+== Registering Variables
+Often in a playbook it may be useful to store the result of a given command in a variable and access it later. Use of the command module in this way can in many ways eliminate the need to write site specific facts, for instance, you could test for the existence of a particular program.
+
+The `*_register_*` module decides what variable to save a result in. The resulting variables can be used in templates, action lines, or when statements.  In our first exercise we will build a playbook that runs a command and registers the standard out response to a variable. We'll then call that variable and display it in the debug output.
+
+=== Create and run your playbook
+. Create a new file called 01_register.yml:
++
+[source,sh]
+----
+[student@control lab01]$ vi 01_register.yml
+----
+. Enter the following lines into your playbook:
++
+[source,yaml]
+----
+- name: Register a Variable and send the content to the debug log
+  hosts: web
+  gather_facts: false
+
+  tasks:
+      - shell: hostname
+        register: my_hostname
+
+      - debug:
+          msg: "my hostname is {{ my_hostname.stdout }}"
+----
++
+. Save the playbook and run it:
++
+[source,sh]
+----
+[student@control lab01]$ ansible-playbook 01_register.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [Register a Variable and send the content to the debug log] ***************
+
+TASK [shell] *******************************************************************
+changed: [node-2]
+changed: [node-1]
+
+TASK [debug] *******************************************************************
+ok: [node-1] => {
+    "msg": "my hostname is ip-172-16-12-73.us-west-1.compute.internal"
+}
+ok: [node-2] => {
+    "msg": "my hostname is ip-172-16-79-107.us-west-1.compute.internal"
+}
+
+PLAY RECAP *********************************************************************
+node-1                     : ok=2    changed=1    unreachable=0    failed=0
+node-2                     : ok=2    changed=1    unreachable=0    failed=0
+----
+If all things go well, you should see output that looks similar to the sample output above. Note that in log output we see the debug task displaying our message with our registered variable included.
+
+=== Things to try
+* Change the command in your playbook to run `*_uptime_*` instead of `*_hostname_*` and observe the results.
+* What happens if you change the your variable from `*_my_hostname.stdout_*` to use `*_my_hostname.stderr_*` make the change and re-run your playbook.
+
+== Using Facts
+Registering variables is great but what's even better is to have some mechanism for Ansible to gather a baseline of information about the systems we are automating and keep track of them so that you don't have to run commands.  You can do this with `*_gather_facts_*`.  You will note that in our previous playbook we had a line in this playbook that told ansible to NOT gather facts.  In this next exercise we are going to turn that off and see what Ansible discovers about the system.
+
+=== Copy and run your playbook
+. Copy your existing playbook from 01_register.yml to 02_facts.yml:
++
+[source,sh]
+----
+[student@control lab01]$ cp 01_register.yml 02_facts.yml
+----
+. Edit 02_facts.yml and change the contents to look like the playbook below:
++
+[source,yaml]
+----
+- name: Use gather_facts to send the content to the debug log
+  hosts: web
+  gather_facts: true
+
+  tasks:
+
+    - debug:
+        msg: "my hostname is {{ ansible_fqdn }}"
+----
++
+As you see we changed `*_gather_facts_*` to be true.  We remove the need of setting a variable and we changed our debug message to use a new variable.  Let's run the playbook and see what happens.
+
+. Save the playbook and run it:
++
+[source,sh]
+----
+[student@control lab01]$ ansible-playbook 02_facts.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [Register a Variable and send the content to the debug log] ***************
+
+TASK [Gathering Facts] *********************************************************
+ok: [node-2]
+ok: [node-1]
+
+TASK [debug] *******************************************************************
+ok: [node-1] => {
+    "msg": "my hostname is ip-172-16-12-73.us-west-1.compute.internal"
+}
+ok: [node-2] => {
+    "msg": "my hostname is ip-172-16-79-107.us-west-1.compute.internal"
+}
+
+PLAY RECAP *********************************************************************
+node-1                     : ok=2    changed=0    unreachable=0    failed=0
+node-2                     : ok=2    changed=0    unreachable=0    failed=0
+----
+Isn't that interesting, we removed code and didn't set a variable, yet we were able to use a variable to bring in information?! The reason we can do this is because when we set `*_gather_facts_*` to be true, we were telling Ansible that we want it to go out and find out all the information it can about the systems we are managing. This is a very good way of making your automation more efficient. In this example I told you what the `*_fact_*` name was that would give us the fully qualified name of the host.  You might be asking yourself, how do I find out all the other facts about this host?  One way to do this is to run the Ansible `*_setup_*` module as an ad-hoc command.
+
+. From the command line execute the command below:
++
+[source,sh]
+----
+[student@control lab01]$ ansible -m setup web
+----
++
+.Sample Output
+[source,sh]
+----
+...
+"type": "ether"
+},
+"ansible_fips": false,
+"ansible_form_factor": "Other",
+"ansible_fqdn": "ip-172-16-12-73.us-west-1.compute.internal",
+"ansible_hostname": "ip-172-16-12-73",
+"ansible_interfaces": [
+  "lo",
+  "eth0"
+],
+"ansible_is_chroot": true,
+"ansible_iscsi_iqn": "",
+"ansible_kernel": "3.10.0-327.36.3.el7.x86_64",
+"ansible_lo": {
+  "active": true,
+  "device": "lo",
+  "features": {
+      "busy_poll": "off [fixed]",
+      "fcoe_mtu": "off [fixed]",
+...
+----
+You should see a long list of JSON formatted data speed by and dump you to a prompt.  You can scroll up in your browswer and see all of the information about the system that Ansible was able to gather when we ran setup (e.g. gathered facts).  I snipped out some of the data so you can see where I found the ansible_fqdn variable that contained the data i wanted. What is great is that you will see that we are gathering facts about every machine we are managing.  so if you had 200 servers in your inventory we would have all of that information and could use it to uniquely automate each host.
+
+=== Things to try
+* Swap out the variable for another and see what kinds of information you can display
+
+== Using When
+Sometimes you will want to skip certain tasks you your playbook depending on certain criteria. This could be something as simple as not installing a certain package if the operating system is a particular version, or it could be something like performing some cleanup steps if a filesystem is getting full. This is easy to do in Ansible with the `*_when_*` clause. As you might guess, `*_when_*` allows you to determine when an action runs.  Let\'s take a look at that in action.
+
+=== Create and run your playbook
+. Create a new file called 03_when.yml:
++
+[source,sh]
+----
+[student@control lab01]$ vi 03_when.yml
+----
+. Enter the following lines into your playbook:
++
+[source,yaml]
+----
+- name: Use gather_facts and when to control which block of code to use
+  hosts: web
+  gather_facts: true
+
+  tasks:
+    - name: "Print out a custom message when the OS is Debian"
+      debug:
+        msg: "Im running Debian"
+      when: (ansible_os_family == "Debian")
+
+    - name: "Print out a custom message when the OS is RedHat"
+      debug:
+        msg: "Im running RedHat... who would run Debian!?!"
+      when: (ansible_os_family == "RedHat")
+----
++
+In this playbook we have created two different tasks that only run `*_when_*` a certain condition is met. In this case we are matching the value of the *ansible_os_family* fact that is gathered when we run the playbook.  Run the playbook and check the output.
+
+. Save the playbook and run it:
++
+[source,sh]
+----
+[student@control lab01]$ ansible-playbook 03_when.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [Use gather_facts and when to control which block of code to use] *********
+
+TASK [Gathering Facts] *********************************************************
+ok: [node-2]
+ok: [node-1]
+
+TASK [Print out a custom message when the OS is Debian] ************************
+skipping: [node-1]
+skipping: [node-2]
+
+TASK [Print out a custom message when the OS is RedHat] ************************
+ok: [node-1] => {
+    "msg": "Im running RedHat... who would run Debian!?!"
+}
+ok: [node-2] => {
+    "msg": "Im running RedHat... who would run Debian!?!"
+}
+
+PLAY RECAP *********************************************************************
+node-1                     : ok=2    changed=0    unreachable=0    failed=0
+node-2                     : ok=2    changed=0    unreachable=0    failed=0
+----
+Here we see that Ansible matched the value of the fact and then ran the appropriate block of code.
+
+=== Things to try
+* Think of other things you could match and then make a decision
+** Examples might be utilizing the `*_apt_*` module when we detect the OS is Debian and utilize the `*_yum_*` module when we detect the OS is RedHat.  This would allow us to have an agnostic playbook that we could use to install packages.
+
+== Using Loop
+There are often times when you may want to do a number of tasks on each host you are managing. For this example we can imagine being tasked with adding a number of users to our web servers. We can employ the use of a `*_loop_*` and iterate through a list of users, ensuring that every one is added to the system.  In our exercise below we will do just that.
+
+=== Create and run your playbook
+. Create a new file called 04_loop.yml:
++
+[source,sh]
+----
+[student@control lab01]$ vi 04_loop.yml
+----
+. Enter the following lines into your playbook:
++
+[source,yaml]
+----
+- name: Create multiple users using a loop
+  hosts: web
+  gather_facts: false
+  become: yes
+  become_user: root
+  become_method: sudo
+
+  tasks:
+    - name: add several users
+      user:
+        name: "{{ item }}"
+        state: present
+        groups: "wheel"
+      loop:
+        - testuser1
+        - testuser2
+        - testuser3
+----
++
+Notice that we are using the command `*_loop_*` and providing it a list of users below it.  We are then using the variable *item* to provide each username to the name parameter.  the combination of the `*_loop_*` command and the item variable we create a loop inside the `*_user_*` module that has the effect of creating each user. Without using loop we would have to have 3 different tasks in our playbook that each called out the testusers that we want to create. Run the playbook and let\'s observe the results.
+
+. Save the playbook and run it:
++
+[source,sh]
+----
+[student@control lab01]$ ansible-playbook 04_loop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [Create multiple users using a loop] **************************************
+
+TASK [add several users] *******************************************************
+changed: [node-2] => (item=testuser1)
+changed: [node-1] => (item=testuser1)
+changed: [node-2] => (item=testuser2)
+changed: [node-1] => (item=testuser2)
+changed: [node-2] => (item=testuser3)
+changed: [node-1] => (item=testuser3)
+
+PLAY RECAP *********************************************************************
+node-1                     : ok=1    changed=1    unreachable=0    failed=0
+node-2                     : ok=1    changed=1    unreachable=0    failed=0
+----
+Here we see quite a few changes that were made to the systems we are managing. In a few seconds we created 3 users on 2 servers, that is 6 changes you would be making that is probably quite easy to do by hand. However, What if we had 50 users on 100 servers, that\'s 5000 changes, probably not something you would want to tackle by hand. In our case using ansible and a short and simple playbook we can execute this in a matter of a minute or two and we\'d be assured that it was done perfectly every time.
+
+=== Things to try
+* Try re-running the playbook, what happens? Is it different from the previous run?
+* Try changing `*_state: present_*` to `*_state: absent_*` and re-run the playbook, what do you expect might happen?
+
+== Combining Register @ Loop
+We now have some really good conditionals that we can use to make our playbook more efficient and more modular. In this exercise we will combine `*_register_*` and `*_loop_*` to set variables and iterate through them in loops.
+
+=== Create and run your playbook
+. Create a new file called 05_register_loop.yml:
++
+[source,sh]
+----
+[student@control lab01]$ vi 05_register_loop.yml
+----
+. Enter the following lines into your playbook:
++
+[source,yaml]
+----
+- name: loop through a set of registered variables
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: echo the contents of a loop
+      shell: "echo {{ item }}"
+      loop:
+        - "one"
+        - "two"
+        - "three"
+      register: echo
+
+    - name: Fail if return code is not 0
+      fail:
+        msg: "The command ({{ item.cmd }}) did not have a 0 return code"
+      when: item.rc != 0
+      loop: "{{ echo.results }}"
+----
++
+You can see that we are defining a loop with the values one, two, three and using those to run a shell command.  We then can take take the results of that and use that in another loop and combine it with a when statement to check the contents of the output.  In this case we are looking for the result codes that are returned when we echo one, two and three.  if the result code returned by that command failed and returned something other than 0 it would `*_fail_*` and spit out a failure message. Let\'s see it in action.
+
+. Save the playbook and run it:
++
+[source,sh]
+----
+[student@control lab01]$ ansible-playbook 05_register_loop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [loop through a set of registered variables] ******************************
+
+TASK [echo the contents of a loop] *********************************************
+changed: [localhost] => (item=one)
+changed: [localhost] => (item=two)
+changed: [localhost] => (item=three)
+
+TASK [Fail if return code is not 0] ********************************************
+skipping: [localhost] => (item={'_ansible_parsed': True, 'stderr_lines': [], '_ansible_item_result': True, u'end': u'2018-09-26 15:59:58.930947', '_ansible_no_log': False, u'stdout': u'one', u'cmd': u'echo one', u'rc': 0, 'item': u'one', u'delta': u'0:00:00.002395', '_ansible_item_label': u'one', u'stderr': u'', u'changed': True, u'invocation': {u'module_args': {u'warn': True, u'executable': None, u'_uses_shell': True, u'_raw_params': u'echo one', u'removes': None, u'argv': None, u'creates': None, u'chdir': None, u'stdin': None}}, 'stdout_lines': [u'one'], u'start': u'2018-09-26 15:59:58.928552', '_ansible_ignore_errors': None, 'failed': False})
+skipping: [localhost] => (item={'_ansible_parsed': True, 'stderr_lines': [], '_ansible_item_result': True, u'end': u'2018-09-26 15:59:59.065822', '_ansible_no_log': False, u'stdout': u'two', u'cmd': u'echo two', u'rc': 0, 'item': u'two', u'delta': u'0:00:00.002410', '_ansible_item_label': u'two', u'stderr': u'', u'changed': True, u'invocation': {u'module_args': {u'warn': True, u'executable': None, u'_uses_shell': True, u'_raw_params': u'echo two', u'removes': None, u'argv': None, u'creates': None, u'chdir': None, u'stdin': None}}, 'stdout_lines': [u'two'], u'start': u'2018-09-26 15:59:59.063412', '_ansible_ignore_errors': None, 'failed': False})
+skipping: [localhost] => (item={'_ansible_parsed': True, 'stderr_lines': [], '_ansible_item_result': True, u'end': u'2018-09-26 15:59:59.199715', '_ansible_no_log': False, u'stdout': u'three', u'cmd': u'echo three', u'rc': 0, 'item': u'three', u'delta': u'0:00:00.002401', '_ansible_item_label': u'three', u'stderr': u'', u'changed': True, u'invocation': {u'module_args': {u'warn': True, u'executable': None, u'_uses_shell': True, u'_raw_params': u'echo three', u'removes': None, u'argv': None, u'creates': None, u'chdir': None, u'stdin': None}}, 'stdout_lines': [u'three'], u'start': u'2018-09-26 15:59:59.197314', '_ansible_ignore_errors': None, 'failed': False})
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=1    changed=1    unreachable=0    failed=0
+----
+We can see from the output that in the first task it looped through the shell module. We then see ansible skipping the three results because they didn\'t return a non zero return code.
+
+=== Things to try
+* Think of other ways you could expand this and deepen your automation capabilities.
+
+== Pausing Loops
+Another way to control your loops is to pause your loops. This capability allows you to control the time (in seconds) between execution of items in a task loop. One way you might use this is when you have tasks that take a random amount of time to execute.  Before moving on to the next task in your loop you could have it pause 2 minutes to wait for the task to be completed.
+
+=== Create and run your playbook
+. Create a new file called 06_pause_loop.yml:
++
+[source,sh]
+----
+[student@control lab01]$ vi 06_pause_loop.yml
+----
+. Enter the following lines into your playbook:
++
+[source,yaml]
+----
+- name: loop through a set of shell commands pausing between each loop item
+  hosts: web
+  gather_facts: false
+
+  tasks:
+    - name: list a set of directories, pause 30s between loop items
+      shell: "ls {{ item }}"
+      loop:
+        - /etc
+        - /var
+        - /opt
+      loop_control:
+        pause: 30
+----
+. Save the playbook and run it:
++
+[source,sh]
+----
+[student@control lab01]$ ansible-playbook 06_pause_loop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [loop through a set of shell commands pausing between each] ***************
+
+TASK [ls as set of directories, pause 30s between loop items] ******************
+changed: [node-2] => (item=/etc)
+changed: [node-1] => (item=/etc)
+changed: [node-2] => (item=/var)
+changed: [node-1] => (item=/var)
+changed: [node-2] => (item=/opt)
+changed: [node-1] => (item=/opt)
+
+PLAY RECAP *********************************************************************
+node-1                     : ok=1    changed=1    unreachable=0    failed=0
+node-2                     : ok=1    changed=1    unreachable=0    failed=0
+----
++
+We can see in our output that between each directory we list Ansible pauses 30 seconds before moving to the next directory in the loop.
+
+=== Things to try
+* Try going back to exercise 4 and adding in pause between each user that is created
+
+== Indexing Loops
+If you need to keep track of where you are in a loop, you can use the `*_index_var_*` option in loop_control to specify a variable name to contain the current loop index.
+
+=== Create and run your playbook
+. Create a new file called 07_index_loop.yml:
++
+[source,sh]
+----
+[student@control lab01]$ vi 07_index_loop.yml
+----
+. Enter the following lines into your playbook:
++
+[source,yaml]
+----
+- name: loop through a list of items and display its index
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: count our items
+      debug:
+        msg: "{{ item }} with index {{ my_idx }}"
+      loop:
+        - pen
+        - pineapple
+        - apple
+        - pen
+      loop_control:
+        index_var: my_idx
+----
+. Save the playbook and run it:
++
+[source,sh]
+----
+[student@control lab01]$ ansible-playbook 07_index_loop.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [loop through a list of items and display its index] *********************
+
+TASK [count our fruit] *********************************************************
+ok: [localhost] => (item=pen) => {
+    "msg": "pen with index 0"
+}
+ok: [localhost] => (item=pineapple) => {
+    "msg": "pineapple with index 1"
+}
+ok: [localhost] => (item=apple) => {
+    "msg": "apple with index 2"
+}
+ok: [localhost] => (item=pen) => {
+    "msg": "pen with index 3"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=1    changed=0    unreachable=0    failed=0
+----
++
+Having access to the index of a loop allows you to have a numeric value that represents both the number of items in your loop as well as where you are numerically when looping through items.  An example of how you might build upon this is to add a when statement that does a task once you\'ve looped through a certain number of items.
+
+=== Things to try
+* Try adding a when statement to perform another when the index reaches 2
+
+== Using Until
+There are often times that you may want to retry a task until a certain condition is met.  Perhaps we are waiting for a socket to open up to connect to or maybe we want to update a system with irregular connectivity we can use the until command to create a loop condition with a specified number of retries and time between retries.
+
+=== Create and run your playbook
+. Create a new file called 08_until.yml:
++
+[source,sh]
+----
+[student@control lab01]$ vi 08_until.yml
+----
+. Enter the following lines into your playbook:
++
+[source,yaml]
+----
+- name: run a command until it displays a certain message
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: run a command until it displays a certain message
+      shell: /usr/bin/foo
+      register: result
+      until: result.stdout.find("all systems go") != -1
+      retries: 5
+      delay: 10
+----
+We are using some new elements in this playbook besides the `*_until_*` command. Along with the until command is a bit of code that allows us to take the variable that we registered "result" and grab the standard out and then use a filter called find to look for specific words in the result variable. We then apply a condition.  In this case the command we are running will never work so when it fails it returns a return code of -1.  Our condition says that as long as we are getting a return code of -1 we will keep retrying the task every 10 seconds for a total of 5 times.  Let\'s see it in action.
+
+. Save the playbook and run it:
++
+[source,sh]
+----
+[student@control lab01]$ ansible-playbook 08_until.yml
+----
++
+.Sample Output
+[source,sh]
+----
+PLAY [run a command until it displays a certain message] ***********************
+
+TASK [run a command until it displays a certain message] ***********************
+FAILED - RETRYING: run a command until it displays a certain message (5 retries left).
+FAILED - RETRYING: run a command until it displays a certain message (4 retries left).
+FAILED - RETRYING: run a command until it displays a certain message (3 retries left).
+FAILED - RETRYING: run a command until it displays a certain message (2 retries left).
+FAILED - RETRYING: run a command until it displays a certain message (1 retries left).
+fatal: [localhost]: FAILED! => {"attempts": 5, "changed": true, "cmd": "/usr/bin/foo", "delta": "0:00:00.002652", "end": "2018-09-26 18:08:13.711280", "msg": "non-zero return code", "rc": 127, "start": "2018-09-26 18:08:13.708628", "stderr": "/bin/sh: /usr/bin/foo: No such file or directory", "stderr_lines": ["/bin/sh: /usr/bin/foo: No such file or directory"], "stdout": "", "stdout_lines": []}
+	to retry, use: --limit @/home/student20/justin/08_until.retry
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=0    changed=0    unreachable=0    failed=1
+----
++
+As we said, this particular playbook is one that we built intentionally to fail so that we could see the retry in action.
+
+=== Things to try
+* Try changing the time out times and number of retries.
+
+In this lab we dove into what conditionals can do for you inside your playbooks. Hopefully you\'ve seen how, just like Ansible modules, conditionals can be used together and in conjunction with another to answer all of your automation decision points.

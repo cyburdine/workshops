@@ -1,0 +1,15 @@
+[all:vars]
+ansible_user=student11
+ansible_ssh_pass=LearnAnsible
+ansible_port=22
+
+[web]
+node-1 ansible_host=54.183.229.209
+node-2 ansible_host=54.183.224.134
+
+[control]
+ansible ansible_host=54.153.125.200
+
+[haproxy]
+
+[grafana]

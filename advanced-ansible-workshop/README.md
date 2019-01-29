@@ -1,0 +1,1 @@
+The files in this folder are the master instuctions for Ansible Advanced Workshop
